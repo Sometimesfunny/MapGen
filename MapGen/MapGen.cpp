@@ -217,6 +217,7 @@ int main(void) {
     bool f = 1, fbuf = 1; // Flags
     enum Modes { SQUARES, LINES } mode; //Drawing modes
     mode = SQUARES;
+    bool scaleflag = true;
 
 	/* Loop until the user closes the window */
     while (!glfwWindowShouldClose(window))
@@ -227,7 +228,54 @@ int main(void) {
 
         offsetx = 0, offsety = 0;
         w = 1, h = 1;
-        if (width >= height) {
+        if (xfield < yfield) {
+            if (width >= height) {
+                w = (float)height / (float)width;
+                offsetx = (width - height) / 2;
+                scaleflag = true;
+            }
+            else if ((xfield < yfield) && (width < height) && (width > (height * (float)xfield / (float)yfield))) {
+                w = (float)height / (float)width;
+                offsetx = (width - height) / 2;
+                scaleflag = true;
+            }
+            else {
+                width = (float)width * (float)yfield / (float)xfield;
+                h = (float)width / (float)height;
+                offsety = (height - width) / 2;
+                width = width * (float)xfield / (float)yfield;
+                scaleflag = false;
+            }
+        }
+        else {
+            if (height >= width) {
+                h = (float)width / (float)height;
+                offsety = (height - width) / 2;
+                scaleflag = true;
+            }
+            else if ((yfield < xfield) && (width > height) && (height > (width * (float)yfield / (float)xfield))) {
+                h = (float)width / (float)height;
+                offsety = (height - width) / 2;
+                scaleflag = true;
+            }
+            else {
+                height = (float)height * (float)xfield / (float)yfield;
+                w = (float)height / (float)width;
+                offsetx = (width - height) / 2;
+                height = height * (float)yfield / (float)xfield;
+                scaleflag = false;
+            }
+        }
+        
+        glViewport(offsetx, offsety, (int)width * w, (int)height * h);
+
+        glLoadIdentity();
+        if (scaleflag)
+            if (yfield > xfield)
+                glScalef((float)xfield / (float)yfield, 1.0f, 1.0f);
+            else
+                glScalef(1.0f, (float)yfield / (float)xfield, 1.0f);
+        /*if (width >= height) {
             w = (float)height / (float)width;
             offsetx = (width - height) / 2;
         }
@@ -236,7 +284,7 @@ int main(void) {
             offsety = (height - width) / 2;
         }
 
-        glViewport(offsetx, offsety, (int)width * w, (int)height * h);
+        glViewport(offsetx, offsety, (int)width * w, (int)height * h);*/
 
         if (GetKeyState(VK_LBUTTON) & (1 << (sizeof(short) * 8 - 1))) {
             GetCursorPos(&p);
@@ -314,11 +362,11 @@ int main(void) {
             Sleep(100);
         }
 
-        glLoadIdentity();
+        /*glLoadIdentity();
         if (yfield > xfield)
             glScalef((float)xfield / (float)yfield, 1.0f, 1.0f);
         else
-            glScalef(1.0f, (float)yfield / (float)xfield, 1.0f);
+            glScalef(1.0f, (float)yfield / (float)xfield, 1.0f);*/
         int k;
         for (int i = 0; i < yfield; ++i)
             for (int j = 0; j < xfield; ++j) {
