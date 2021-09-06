@@ -1,7 +1,6 @@
 ﻿#include <GLFW/glfw3.h>
 #include <Windows.h>
 #include <iostream>
-#include <fstream>
 #include <vector>
 
 class Coord
@@ -50,12 +49,25 @@ void DrawSquareBlue(float x, float y, float dx, float dy) {
     glVertex2f(x + dx - 1, y + dy - 1);
     glEnd();
 }
-void DrawLine(float x1, float y1, float x2, float y2) {
+void DrawLine(float x1, float y1, float x2, float y2, int c1 = 1, int c2 = 1) {
     glEnable(GL_LINE_STIPPLE);
-    glLineStipple(0, 0x00ff);
+    glLineStipple((c1+c2)%5 , 0x0f0f);
     glLineWidth(3);
     glBegin(GL_LINES);
-    glColor3f(0.2f, 1.0f, 0.4f);
+    switch ((c1 + c2) % 4) {
+    case 0:
+        glColor3f(0.2f, 1.0f, 0.4f);
+        break;
+    case 1:
+        glColor3f(1.0f, 1.0f, 0.4f);
+        break;
+    case 2:
+        glColor3f(0.5f, 0.5f, 0.0f);
+        break;
+    case 3:
+        glColor3f(0.0f, 0.0f, 0.0f);
+        break;
+    }
     glVertex2f(x1 - 1, y1 - 1);
     glVertex2f(x2 - 1, y2 - 1);
     glEnd();
@@ -64,10 +76,11 @@ void DrawLine(float x1, float y1, float x2, float y2) {
 void DrawDigit(int n, int kx, int ky, int x, int y, float offset = 0.0f, float scale = 1.0f) {
     glPushMatrix();
     glScalef(1.0f / (float)kx, 1.0f / (float)ky, 1.0f);
-    glTranslatef((float)x * 2 - kx + 1, (float)y * 2 - ky + 1, 0.0f);
+    if (kx > ky)
+        offset = offset * (float)kx / (float)ky;
+    glTranslatef((float)x * 2 - kx + 1 + offset, (float)y * 2 - ky + 1, 0.0f);
     glLineWidth(2);
     glColor3f(0.89f, 0.67f, 0.2f);
-    glTranslatef(offset, 0.0f, 0.0f);
     glScalef(scale, scale, 1.0f);
     switch (n)
     {
@@ -169,21 +182,12 @@ void DrawDigit(int n, int kx, int ky, int x, int y, float offset = 0.0f, float s
 
 int main(void) {
 	int n = 0, m = 0;
-	/*char s[256] = { 0 };
-	std::cout << "Please, enter map name: ";
-	std::cin >> s;
-	strcat_s(s, ".bin");*/
+
 	std::cout << "Please, enter map size (n, m): ";
 	std::cin >> n >> m;
 
-	/*std::ofstream file(s, std::ios::binary);
-	if (!file.is_open()) {
-		perror("Error");
-		return -1;
-	}
-	file.write((char*)&n, sizeof(n));
-	file.write((char*)&m, sizeof(m));
-	file.write((char*)&k, sizeof(k));*/
+    std::cout << "Click LMB to place/link object.\nPress M to change mode (Placing/Linking)" \
+        << std::endl;
 	
 	GLFWwindow* window;
 
@@ -202,7 +206,6 @@ int main(void) {
 	glfwMakeContextCurrent(window);
 
     HWND hwnd = FindWindow(NULL, TEXT("Map Generator"));
-    //std::cout << hwnd << std::endl;
     int xfield = n, yfield = m; // Fields counter
     int width = 0;
     int height = 0;
@@ -215,8 +218,12 @@ int main(void) {
     std::vector<int> buf; // Linking buffer
     int cnt;
     bool f = 1, fbuf = 1; // Flags
-    enum Modes { SQUARES, LINES } mode; //Drawing modes
-    mode = SQUARES;
+    enum Modes { SQUARES, LINES }; //Drawing modes
+#pragma warning(push)
+#pragma warning(disable: 26812)
+    Modes mode = SQUARES; // Default mode
+#pragma warning(pop)
+    bool scaleflag = true;
 
 	/* Loop until the user closes the window */
     while (!glfwWindowShouldClose(window))
@@ -227,17 +234,58 @@ int main(void) {
 
         offsetx = 0, offsety = 0;
         w = 1, h = 1;
-        if (width >= height) {
-            w = (float)height / (float)width;
-            offsetx = (width - height) / 2;
+        // Scaling image
+        if (xfield < yfield) {
+            if (width >= height) {
+                w = (float)height / (float)width;
+                offsetx = (width - height) / 2;
+                scaleflag = true;
+            }
+            else if ((xfield < yfield) && (width < height) && \
+                (width > (height * (float)xfield / (float)yfield))) {
+                w = (float)height / (float)width;
+                offsetx = (width - height) / 2;
+                scaleflag = true;
+            }
+            else {
+                width = (float)width * (float)yfield / (float)xfield;
+                h = (float)width / (float)height;
+                offsety = (height - width) / 2;
+                width = width * (float)xfield / (float)yfield;
+                scaleflag = false;
+            }
         }
         else {
-            h = (float)width / (float)height;
-            offsety = (height - width) / 2;
+            if (height >= width) {
+                h = (float)width / (float)height;
+                offsety = (height - width) / 2;
+                scaleflag = true;
+            }
+            else if ((yfield < xfield) && (width > height) && \
+                (height > (width * (float)yfield / (float)xfield))) {
+                h = (float)width / (float)height;
+                offsety = (height - width) / 2;
+                scaleflag = true;
+            }
+            else {
+                height = (float)height * (float)xfield / (float)yfield;
+                w = (float)height / (float)width;
+                offsetx = (width - height) / 2;
+                height = height * (float)yfield / (float)xfield;
+                scaleflag = false;
+            }
         }
-
+        
         glViewport(offsetx, offsety, (int)width * w, (int)height * h);
 
+        glLoadIdentity();
+        if (scaleflag)
+            if (yfield > xfield)
+                glScalef((float)xfield / (float)yfield, 1.0f, 1.0f);
+            else
+                glScalef(1.0f, (float)yfield / (float)xfield, 1.0f);
+
+        //Check LMB press
         if (GetKeyState(VK_LBUTTON) & (1 << (sizeof(short) * 8 - 1))) {
             GetCursorPos(&p);
             ScreenToClient(hwnd, &p);
@@ -250,11 +298,13 @@ int main(void) {
                 h = width * (float)yfield / (float)xfield;
                 offsety = (width - h) / 2 + offsety;
             }
-            if ((p.x > offsetx) && (p.x < (width - offsetx)) && (p.y > offsety) && (p.y < (height - offsety))) {
+            if ((p.x > offsetx) && (p.x < (width - offsetx)) && \
+                (p.y > offsety) && (p.y < (height - offsety))) {
                 x = (float)(p.x - offsetx) / (float)(width - 2 * offsetx) * xfield;
                 y = yfield - (float)(p.y - offsety) / (float)(height - 2 * offsety)* yfield;
+                // Put square
                 if (mode == SQUARES) {
-                    for (int i = 0; i < arr.size(); ++i) {
+                    for (UINT i = 0; i < arr.size(); ++i) {
                         if (arr[i] == Coord(x, y)) {
                             f = 0;
                             break;
@@ -266,8 +316,9 @@ int main(void) {
                     }
                     f = 1;
                 }
+                // Put line
                 else {
-                    for (int i = 0; i < arr.size(); ++i) {
+                    for (UINT i = 0; i < arr.size(); ++i) {
                         if (arr[i] == Coord(x, y)) {
                             f = 0;
                             cnt = i;
@@ -282,7 +333,7 @@ int main(void) {
                             buf.clear();
                         }
                     if (buf.size() == 2) {
-                        for (int i = 0; i < links[buf[0]].size(); ++i) {
+                        for (UINT i = 0; i < links[buf[0]].size(); ++i) {
                             if (links[buf[0]][i] == buf[1]) {
                                 fbuf = 0;
                                 std::cout << "Already linked" << std::endl;
@@ -292,7 +343,8 @@ int main(void) {
                         if (fbuf) {
                             links[buf[0]].push_back(buf[1]);
                             links[buf[1]].push_back(buf[0]);
-                            std::cout << "Linked [" << buf[0] << "] and [" << buf[1] << "]" << std::endl;
+                            std::cout << "Linked [" << buf[0] << "] and [" << \
+                                buf[1] << "]" << std::endl;
                         }
                         fbuf = 1;
                         buf.clear();
@@ -302,6 +354,7 @@ int main(void) {
             }
             Sleep(100);
         }
+        // Change mode if 'M' pressed
         if (GetKeyState('M') & (1 << (sizeof(short) * 8 - 1))) {
             if (mode == SQUARES) {
                 mode = LINES;
@@ -314,12 +367,8 @@ int main(void) {
             Sleep(100);
         }
 
-        glLoadIdentity();
-        if (yfield > xfield)
-            glScalef((float)xfield / (float)yfield, 1.0f, 1.0f);
-        else
-            glScalef(1.0f, (float)yfield / (float)xfield, 1.0f);
-        int k;
+        UINT k;
+        // Draw Squares and digits
         for (int i = 0; i < yfield; ++i)
             for (int j = 0; j < xfield; ++j) {
                 k = 0;
@@ -330,8 +379,8 @@ int main(void) {
                     if (k < 10)
                         DrawDigit(k, xfield, yfield, j, i);
                     else {
-                        DrawDigit(k / 10, xfield, yfield, j, i, -dx * 1.5f, 0.6f);
-                        DrawDigit(k % 10, xfield, yfield, j, i, +dx * 1.5f, 0.6f);
+                        DrawDigit(k / 10, xfield, yfield, j, i, -dx, 0.6f);
+                        DrawDigit(k % 10, xfield, yfield, j, i, +dx, 0.6f);
                     }
                     
                 }
@@ -339,10 +388,14 @@ int main(void) {
                     DrawSquare(j * dx, i * dy, dx, dy);
                 }
             }
-        for (int i = 0; i < arr.size(); ++i) {
-            for (int j = 0; j < links[i].size(); ++j) {
+        // Draw lines
+        for (UINT i = 0; i < arr.size(); ++i) {
+            for (UINT j = 0; j < links[i].size(); ++j) {
                 if (links[i][j] > i) {
-                    DrawLine((float)arr[i].x * dx + dx / 2.0f, (float)arr[i].y * dy + dy / 2.0f, (float)arr[links[i][j]].x * dx + dx / 2.0f, (float)arr[links[i][j]].y * dy + dy / 2.0f);
+                    DrawLine((float)arr[i].x * dx + dx / 2.0f, \
+                        (float)arr[i].y * dy + dy / 2.0f, \
+                        (float)arr[links[i][j]].x * dx + dx / 2.0f, \
+                        (float)arr[links[i][j]].y * dy + dy / 2.0f, i, j);
                 }
             }
         }
@@ -355,17 +408,6 @@ int main(void) {
     }
 
     glfwTerminate();
-
-	/*for (int i = 0; i < k * 2; ++i) {
-		do
-		{
-			std::cin >> l;
-			if ((l >= m) || (l >= n))
-				std::cout << "Please, try again" << std::endl;
-		} while (l >= 10);
-		file.write((char*)&l, sizeof(l));
-	}
-	file.close();*/
 
 	return 0;
 }
